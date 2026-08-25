@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Run in non-US regions — Vercel's US (iad1) AWS IPs are blocked by TikTok CDN
-export const preferredRegion = ['sin1', 'hnd1', 'fra1'];
-
 /**
  * If TIKTOK_PROXY_BASE is set (e.g. your Cloudflare Worker URL like
  * https://tiktok-proxy.yourname.workers.dev), TikTok CDN URLs will be
