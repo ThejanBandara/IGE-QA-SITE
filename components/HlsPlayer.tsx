@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Volume2, VolumeX, AlertCircle, RefreshCw, Radio, User } from 'lucide-react';
+import { Volume2, VolumeX, AlertCircle, RefreshCw, Radio, User, Smartphone } from 'lucide-react';
 
 interface HlsPlayerProps {
   src: string;
@@ -25,11 +25,49 @@ export function HlsPlayer({
   viewerCount,
 }: HlsPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafRef = useRef<number | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState(isMuted);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+
+  // Draw blurred background canvas from video frames (portrait mode only)
+  const startBgDraw = useCallback(() => {
+    const draw = () => {
+      const canvas = bgCanvasRef.current;
+      const video = videoRef.current;
+      if (canvas && video && video.readyState >= 2 && !video.paused) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+      }
+      rafRef.current = window.setTimeout(() => {
+        rafRef.current = requestAnimationFrame(draw) as unknown as number;
+      }, 400); // ~2.5fps for bg — cheap
+    };
+    rafRef.current = requestAnimationFrame(draw) as unknown as number;
+  }, []);
+
+  const stopBgDraw = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      clearTimeout(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isPortrait && isPlaying) {
+      startBgDraw();
+    } else {
+      stopBgDraw();
+    }
+    return stopBgDraw;
+  }, [isPortrait, isPlaying, startBgDraw, stopBgDraw]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -37,6 +75,7 @@ export function HlsPlayer({
 
     setError(null);
     setIsLoading(true);
+    setIsPortrait(false);
 
     if (Hls.isSupported()) {
       if (hlsRef.current) {
@@ -95,7 +134,6 @@ export function HlsPlayer({
                 );
                 // Reconfigure hls.js without TikTok referrer for proxy URL
                 if (!isFallbackTikTok) {
-                  // proxy URL — recreate without fetchSetup
                   hls.destroy();
                   const fallbackHls = new Hls({
                     enableWorker: true,
@@ -182,9 +220,33 @@ export function HlsPlayer({
     }
   };
 
+  // Detect portrait orientation from video metadata
+  const handleLoadedMetadata = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const portrait = video.videoHeight > video.videoWidth;
+    setIsPortrait(portrait);
+  };
+
   return (
     <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden group">
-      {/* Video Element */}
+
+      {/* ── Blurred Background for Portrait Streams ─────────────────────── */}
+      {isPortrait && (
+        <canvas
+          ref={bgCanvasRef}
+          width={160}
+          height={90}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{
+            filter: 'blur(18px) brightness(0.35) saturate(1.4)',
+            transform: 'scale(1.08)',
+            objectFit: 'cover',
+          }}
+        />
+      )}
+
+      {/* ── Main Video Element ────────────────────────────────────────────── */}
       <video
         ref={videoRef}
         playsInline
@@ -192,18 +254,23 @@ export function HlsPlayer({
         poster={poster}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        className="w-full h-full object-contain bg-black"
+        onLoadedMetadata={handleLoadedMetadata}
+        className={
+          isPortrait
+            ? 'relative z-10 h-full w-auto max-w-full object-contain'
+            : 'w-full h-full object-contain bg-black'
+        }
       />
 
-      {/* Loading Spinner */}
+      {/* ── Loading Spinner ───────────────────────────────────────────────── */}
       {isLoading && !error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs z-10 space-y-2">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs z-20 space-y-2">
           <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
           <span className="text-[11px] font-mono text-cyan-300">Connecting to Live Feed...</span>
         </div>
       )}
 
-      {/* Error Fallback State */}
+      {/* ── Error State ───────────────────────────────────────────────────── */}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 p-4 text-center z-20 space-y-2">
           <AlertCircle className="w-8 h-8 text-rose-400" />
@@ -220,11 +287,16 @@ export function HlsPlayer({
         </div>
       )}
 
-      {/* Stream Overlay Meta */}
-      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10 pointer-events-none">
+      {/* ── Stream Overlay Meta ───────────────────────────────────────────── */}
+      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-30 pointer-events-none">
         <span className="px-2 py-0.5 rounded bg-rose-600/90 text-white font-bold text-[10px] flex items-center gap-1 shadow">
           <Radio className="w-3 h-3 animate-pulse" /> LIVE
         </span>
+        {isPortrait && (
+          <span className="px-1.5 py-0.5 rounded bg-violet-600/90 text-white font-bold text-[10px] flex items-center gap-1 shadow">
+            <Smartphone className="w-2.5 h-2.5" /> 9:16
+          </span>
+        )}
         {viewerCount !== undefined && viewerCount > 0 && (
           <span className="px-2 py-0.5 rounded bg-black/70 border border-zinc-700/80 text-zinc-300 text-[10px] font-mono flex items-center gap-1 backdrop-blur-xs">
             <User className="w-3 h-3 text-cyan-400" />
@@ -233,8 +305,8 @@ export function HlsPlayer({
         )}
       </div>
 
-      {/* Floating Audio Unmute Button */}
-      <div className="absolute bottom-3 right-3 z-20 opacity-90 hover:opacity-100 transition-opacity">
+      {/* ── Audio Toggle ─────────────────────────────────────────────────── */}
+      <div className="absolute bottom-3 right-3 z-30 opacity-90 hover:opacity-100 transition-opacity">
         <button
           onClick={toggleAudio}
           title={isAudioMuted ? 'Click to Unmute' : 'Click to Mute'}
