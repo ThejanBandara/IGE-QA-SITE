@@ -116,17 +116,68 @@ export async function GET(request: NextRequest) {
             const streamObj =
               typeof streamDataRaw === 'string' ? JSON.parse(streamDataRaw) : streamDataRaw;
             const mainData = (streamObj as Record<string, unknown>)?.data as Record<string, Record<string, unknown>>;
+
+            // ── Log the raw streamObj structure for debugging ──────────────────
+            console.log(`[tiktok-live] ${endpointLabel} streamObj top-level keys: ${Object.keys(streamObj || {}).join(', ')}`);
+
             if (mainData) {
               const qualities = Object.keys(mainData);
               console.log(`[tiktok-live] ${endpointLabel} Available quality keys: ${qualities.join(', ')}`);
+
+              // Log the structure of each quality to find the actual HLS path
+              for (const q of qualities) {
+                const qualityObj = mainData[q];
+                if (qualityObj && typeof qualityObj === 'object') {
+                  console.log(`[tiktok-live] ${endpointLabel} quality["${q}"] keys: ${Object.keys(qualityObj).join(', ')}`);
+                  // Log one level deeper for 'main' if it exists
+                  const mainStream = qualityObj.main as Record<string, unknown>;
+                  if (mainStream && typeof mainStream === 'object') {
+                    console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].main keys: ${Object.keys(mainStream).join(', ')}`);
+                    console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].main.hls: ${String(mainStream.hls || 'MISSING').slice(0, 120)}`);
+                    console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].main.flv: ${String(mainStream.flv || 'MISSING').slice(0, 120)}`);
+                  } else {
+                    // Try hls/flv/url_list directly on the quality object
+                    console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].hls: ${String(qualityObj.hls || 'MISSING').slice(0, 120)}`);
+                    console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].flv: ${String(qualityObj.flv || 'MISSING').slice(0, 120)}`);
+                    const urlList = qualityObj.url_list as string[];
+                    if (Array.isArray(urlList) && urlList.length > 0) {
+                      console.log(`[tiktok-live] ${endpointLabel} quality["${q}"].url_list[0]: ${String(urlList[0]).slice(0, 120)}`);
+                    }
+                  }
+                }
+              }
+
+              // ── Probe all known TikTok HLS path variants ───────────────────
+              const tryHls = (q: string): string | undefined => {
+                const qObj = mainData[q] as Record<string, unknown> | undefined;
+                if (!qObj) return undefined;
+                // Pattern 1: quality.main.hls  (old webcast endpoint)
+                const mainStream = qObj.main as Record<string, unknown> | undefined;
+                if (mainStream?.hls) return mainStream.hls as string;
+                // Pattern 2: quality.hls  (api-live endpoint)
+                if (qObj.hls) return qObj.hls as string;
+                // Pattern 3: quality.url_list[0] where url ends with .m3u8
+                const urlList = qObj.url_list as string[] | undefined;
+                if (Array.isArray(urlList)) {
+                  const m3u8 = urlList.find((u) => u.includes('.m3u8'));
+                  if (m3u8) return m3u8;
+                  if (urlList[0]) return urlList[0];
+                }
+                return undefined;
+              };
+
               rawHlsUrl =
-                (mainData?.hd?.main as Record<string, unknown>)?.hls as string ||
-                (mainData?.sd?.main as Record<string, unknown>)?.hls as string ||
-                (mainData?.origin?.main as Record<string, unknown>)?.hls as string ||
-                (mainData?.ld?.main as Record<string, unknown>)?.hls as string;
-              console.log(`[tiktok-live] ${endpointLabel} Extracted HLS URL: ${rawHlsUrl ? rawHlsUrl.slice(0, 100) + '...' : 'NOT FOUND'}`);
+                tryHls('hd') ||
+                tryHls('sd') ||
+                tryHls('origin') ||
+                tryHls('ld') ||
+                tryHls('md') ||
+                // Try any available quality as last resort
+                qualities.map(tryHls).find(Boolean);
+
+              console.log(`[tiktok-live] ${endpointLabel} Extracted HLS URL: ${rawHlsUrl ? rawHlsUrl.slice(0, 120) + '...' : 'NOT FOUND'}`);
             } else {
-              console.warn(`[tiktok-live] ${endpointLabel} streamObj.data is null/undefined`);
+              console.warn(`[tiktok-live] ${endpointLabel} streamObj.data is null/undefined. streamObj keys: ${Object.keys(streamObj || {}).join(', ')}`);
             }
           } catch (e) {
             console.warn(`[tiktok-live] ${endpointLabel} Failed parsing stream_data JSON:`, e);
