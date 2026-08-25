@@ -255,11 +255,7 @@ export function HlsPlayer({
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onLoadedMetadata={handleLoadedMetadata}
-        className={
-          isPortrait
-            ? 'relative z-10 h-full w-auto max-w-full object-contain'
-            : 'w-full h-full object-contain bg-black'
-        }
+        className="absolute inset-0 w-full h-full object-contain z-10"
       />
 
       {/* ── Loading Spinner ───────────────────────────────────────────────── */}
