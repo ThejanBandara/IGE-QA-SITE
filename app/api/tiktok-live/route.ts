@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Run in non-US regions — Vercel's US (iad1) AWS IPs are blocked by TikTok CDN
+export const preferredRegion = ['sin1', 'hnd1', 'fra1'];
+
 export interface TikTokLiveResponse {
   success: boolean;
   isLive: boolean;
