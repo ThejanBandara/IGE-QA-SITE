@@ -11,11 +11,13 @@ export interface TikTokLiveResponse {
   viewerCount?: number;
   coverUrl?: string;
   error?: string;
+  debug?: object;
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   let username = searchParams.get('username') || searchParams.get('url') || '';
+  const showDebug = searchParams.get('debug') === '1';
 
   username = username.trim();
   if (username.startsWith('http://') || username.startsWith('https://')) {
@@ -25,6 +27,8 @@ export async function GET(request: NextRequest) {
     }
   }
   username = username.replace(/^@/, '').trim();
+
+  console.log(`[tiktok-live] Request started for username: "${username}"`);
 
   if (!username) {
     return NextResponse.json(
@@ -40,7 +44,7 @@ export async function GET(request: NextRequest) {
     `https://webcast-va.tiktok.com/webcast/room/info/?aid=1988&unique_id=${encodeURIComponent(username)}`,
   ];
 
-  const headers = {
+  const requestHeaders = {
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Referer': 'https://www.tiktok.com/',
@@ -49,79 +53,135 @@ export async function GET(request: NextRequest) {
     'Cache-Control': 'no-cache',
   };
 
-  for (const apiUrl of endpoints) {
+  const debugLog: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < endpoints.length; i++) {
+    const apiUrl = endpoints[i];
+    const endpointLabel = `endpoint[${i}]`;
+    console.log(`[tiktok-live] Trying ${endpointLabel}: ${apiUrl}`);
+
     try {
       const response = await fetch(apiUrl, {
-        headers,
+        headers: requestHeaders,
         cache: 'no-store',
       });
 
-      if (response.ok) {
-        const json = await response.json();
-        const liveRoom = json?.data?.liveRoom || json?.data?.room || json?.data;
+      const httpStatus = response.status;
+      const responseHeaders = Object.fromEntries(response.headers.entries());
+      console.log(`[tiktok-live] ${endpointLabel} HTTP status: ${httpStatus}`);
 
-        if (liveRoom && (liveRoom.status === 2 || liveRoom.status === 4 || liveRoom.streamData || liveRoom.title)) {
-          const isLive = liveRoom.status === 2 || liveRoom.status === '2';
-          const title = liveRoom.title || `@${username} Live Broadcast`;
-          const viewerCount = liveRoom.userCount || liveRoom.liveRoomUserInfo?.user?.stats?.followerCount;
-          const coverUrl = liveRoom.coverUrl || liveRoom.owner?.avatarThumb;
+      if (!response.ok) {
+        const bodyText = await response.text().catch(() => '<unreadable>');
+        console.warn(`[tiktok-live] ${endpointLabel} NON-OK response body (first 500 chars): ${bodyText.slice(0, 500)}`);
+        debugLog.push({ endpoint: apiUrl, httpStatus, responseHeaders, error: `HTTP ${httpStatus}`, body: bodyText.slice(0, 500) });
+        continue;
+      }
 
-          let rawHlsUrl: string | undefined;
-          const streamDataRaw = liveRoom.streamData?.pull_data?.stream_data || liveRoom.stream_url?.pull_data?.stream_data;
+      const contentType = responseHeaders['content-type'] || '';
+      console.log(`[tiktok-live] ${endpointLabel} Content-Type: ${contentType}`);
 
-          if (streamDataRaw) {
-            try {
-              const streamObj =
-                typeof streamDataRaw === 'string' ? JSON.parse(streamDataRaw) : streamDataRaw;
-              const mainData = streamObj?.data;
-              if (mainData) {
-                rawHlsUrl =
-                  mainData?.hd?.main?.hls ||
-                  mainData?.sd?.main?.hls ||
-                  mainData?.origin?.main?.hls ||
-                  mainData?.ld?.main?.hls;
-              }
-            } catch (e) {
-              console.warn('Failed parsing stream_data JSON', e);
+      let json: Record<string, unknown>;
+      try {
+        json = await response.json();
+      } catch (parseErr) {
+        console.warn(`[tiktok-live] ${endpointLabel} JSON parse failed:`, parseErr);
+        debugLog.push({ endpoint: apiUrl, httpStatus, error: 'JSON parse failed', parseErr: String(parseErr) });
+        continue;
+      }
+
+      const liveRoom = (json?.data as Record<string, unknown>)?.liveRoom || (json?.data as Record<string, unknown>)?.room || json?.data;
+      console.log(`[tiktok-live] ${endpointLabel} liveRoom.status:`, (liveRoom as Record<string, unknown>)?.status);
+      console.log(`[tiktok-live] ${endpointLabel} liveRoom keys:`, liveRoom ? Object.keys(liveRoom as object).join(', ') : 'null/undefined');
+
+      if (liveRoom && ((liveRoom as Record<string, unknown>).status === 2 || (liveRoom as Record<string, unknown>).status === 4 || (liveRoom as Record<string, unknown>).streamData || (liveRoom as Record<string, unknown>).title)) {
+        const isLive = (liveRoom as Record<string, unknown>).status === 2 || (liveRoom as Record<string, unknown>).status === '2';
+        const title = (liveRoom as Record<string, unknown>).title as string || `@${username} Live Broadcast`;
+        const viewerCount = (liveRoom as Record<string, unknown>).userCount as number || ((liveRoom as Record<string, unknown>).liveRoomUserInfo as Record<string, unknown>)?.user as number;
+        const coverUrl = (liveRoom as Record<string, unknown>).coverUrl as string || ((liveRoom as Record<string, unknown>).owner as Record<string, unknown>)?.avatarThumb as string;
+
+        console.log(`[tiktok-live] ${endpointLabel} isLive: ${isLive}, title: ${title}`);
+
+        let rawHlsUrl: string | undefined;
+        const streamDataRaw =
+          ((liveRoom as Record<string, unknown>).streamData as Record<string, unknown>)?.pull_data as Record<string, unknown>
+            ? (((liveRoom as Record<string, unknown>).streamData as Record<string, unknown>).pull_data as Record<string, unknown>).stream_data as string
+            : ((liveRoom as Record<string, unknown>).stream_url as Record<string, unknown>)?.pull_data as Record<string, unknown>
+            ? (((liveRoom as Record<string, unknown>).stream_url as Record<string, unknown>).pull_data as Record<string, unknown>).stream_data as string
+            : undefined;
+
+        console.log(`[tiktok-live] ${endpointLabel} streamDataRaw present: ${!!streamDataRaw}`);
+
+        if (streamDataRaw) {
+          try {
+            const streamObj =
+              typeof streamDataRaw === 'string' ? JSON.parse(streamDataRaw) : streamDataRaw;
+            const mainData = (streamObj as Record<string, unknown>)?.data as Record<string, Record<string, unknown>>;
+            if (mainData) {
+              const qualities = Object.keys(mainData);
+              console.log(`[tiktok-live] ${endpointLabel} Available quality keys: ${qualities.join(', ')}`);
+              rawHlsUrl =
+                (mainData?.hd?.main as Record<string, unknown>)?.hls as string ||
+                (mainData?.sd?.main as Record<string, unknown>)?.hls as string ||
+                (mainData?.origin?.main as Record<string, unknown>)?.hls as string ||
+                (mainData?.ld?.main as Record<string, unknown>)?.hls as string;
+              console.log(`[tiktok-live] ${endpointLabel} Extracted HLS URL: ${rawHlsUrl ? rawHlsUrl.slice(0, 100) + '...' : 'NOT FOUND'}`);
+            } else {
+              console.warn(`[tiktok-live] ${endpointLabel} streamObj.data is null/undefined`);
             }
+          } catch (e) {
+            console.warn(`[tiktok-live] ${endpointLabel} Failed parsing stream_data JSON:`, e);
+            debugLog.push({ endpoint: apiUrl, error: 'stream_data parse failed', detail: String(e) });
           }
+        } else {
+          console.warn(`[tiktok-live] ${endpointLabel} No streamData found in liveRoom — stream may be offline`);
+        }
 
-          if (isLive && rawHlsUrl) {
-            const cleanHls = rawHlsUrl.replace(/[\\"\s]+$/, '');
-            const proxiedUrl = `/api/proxy-stream?url=${encodeURIComponent(cleanHls)}`;
+        if (isLive && rawHlsUrl) {
+          const cleanHls = rawHlsUrl.replace(/[\\"\\s]+$/, '');
+          const proxiedUrl = `/api/proxy-stream?url=${encodeURIComponent(cleanHls)}`;
 
-            return NextResponse.json({
-              success: true,
-              isLive: true,
-              username,
-              title,
-              hlsUrl: proxiedUrl,
-              directHlsUrl: cleanHls,
-              viewerCount,
-              coverUrl,
-            });
-          }
-
+          console.log(`[tiktok-live] SUCCESS — returning proxied HLS for @${username}`);
           return NextResponse.json({
             success: true,
-            isLive: false,
+            isLive: true,
             username,
             title,
-            error: `@${username} is currently OFFLINE`,
+            hlsUrl: proxiedUrl,
+            directHlsUrl: cleanHls,
             viewerCount,
             coverUrl,
+            ...(showDebug && { debug: debugLog }),
           });
         }
+
+        console.log(`[tiktok-live] ${endpointLabel} OFFLINE — no HLS URL or not live`);
+        return NextResponse.json({
+          success: true,
+          isLive: false,
+          username,
+          title,
+          error: `@${username} is currently OFFLINE`,
+          viewerCount,
+          coverUrl,
+          ...(showDebug && { debug: debugLog }),
+        });
+      } else {
+        console.warn(`[tiktok-live] ${endpointLabel} liveRoom not found or no usable fields. JSON keys: ${Object.keys(json || {}).join(', ')}`);
+        debugLog.push({ endpoint: apiUrl, httpStatus, warning: 'liveRoom not found', topLevelKeys: Object.keys(json || {}) });
       }
     } catch (endpointErr) {
-      console.warn(`Error querying endpoint ${apiUrl}:`, endpointErr);
+      console.warn(`[tiktok-live] ${endpointLabel} FETCH ERROR:`, endpointErr);
+      debugLog.push({ endpoint: apiUrl, fetchError: String(endpointErr) });
     }
   }
+
+  console.error(`[tiktok-live] All endpoints exhausted for @${username}. Debug:`, JSON.stringify(debugLog));
 
   return NextResponse.json({
     success: false,
     isLive: false,
     username,
     error: `Could not retrieve live stream for @${username} (Stream may be offline or restricted)`,
+    ...(showDebug && { debug: debugLog }),
   });
 }
