@@ -6,6 +6,7 @@ export interface TikTokLiveResponse {
   username: string;
   title?: string;
   hlsUrl?: string;
+  directHlsUrl?: string;
   flvUrl?: string;
   viewerCount?: number;
   coverUrl?: string;
@@ -32,92 +33,95 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  try {
-    // 1. Query TikTok Live Room API
-    const apiUrl = `https://www.tiktok.com/api-live/user/room/?aid=1988&app_language=en&sourceType=54&uniqueId=${encodeURIComponent(
-      username
-    )}`;
+  // Endpoints to query in fallback order
+  const endpoints = [
+    `https://webcast.tiktok.com/webcast/room/info/?aid=1988&sourceType=54&unique_id=${encodeURIComponent(username)}`,
+    `https://www.tiktok.com/api-live/user/room/?aid=1988&app_language=en&sourceType=54&uniqueId=${encodeURIComponent(username)}`,
+    `https://webcast-va.tiktok.com/webcast/room/info/?aid=1988&unique_id=${encodeURIComponent(username)}`,
+  ];
 
-    const response = await fetch(apiUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://www.tiktok.com/',
-        'Accept': 'application/json',
-      },
-      next: { revalidate: 10 },
-    });
+  const headers = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Referer': 'https://www.tiktok.com/',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+  };
 
-    if (response.ok) {
-      const json = await response.json();
-      const liveRoom = json?.data?.liveRoom;
+  for (const apiUrl of endpoints) {
+    try {
+      const response = await fetch(apiUrl, {
+        headers,
+        cache: 'no-store',
+      });
 
-      if (liveRoom) {
-        const isLive = liveRoom.status === 2;
-        const title = liveRoom.title || `@${username} Live Broadcast`;
-        const viewerCount = liveRoom.userCount || liveRoom.liveRoomUserInfo?.user?.stats?.followerCount;
-        const coverUrl = liveRoom.coverUrl || liveRoom.owner?.avatarThumb;
+      if (response.ok) {
+        const json = await response.json();
+        const liveRoom = json?.data?.liveRoom || json?.data?.room || json?.data;
 
-        let rawHlsUrl: string | undefined;
-        const streamDataRaw = liveRoom.streamData?.pull_data?.stream_data;
+        if (liveRoom && (liveRoom.status === 2 || liveRoom.status === 4 || liveRoom.streamData || liveRoom.title)) {
+          const isLive = liveRoom.status === 2 || liveRoom.status === '2';
+          const title = liveRoom.title || `@${username} Live Broadcast`;
+          const viewerCount = liveRoom.userCount || liveRoom.liveRoomUserInfo?.user?.stats?.followerCount;
+          const coverUrl = liveRoom.coverUrl || liveRoom.owner?.avatarThumb;
 
-        if (streamDataRaw) {
-          try {
-            const streamObj =
-              typeof streamDataRaw === 'string' ? JSON.parse(streamDataRaw) : streamDataRaw;
-            const mainData = streamObj?.data;
-            if (mainData) {
-              rawHlsUrl =
-                mainData?.hd?.main?.hls ||
-                mainData?.sd?.main?.hls ||
-                mainData?.origin?.main?.hls ||
-                mainData?.ld?.main?.hls;
+          let rawHlsUrl: string | undefined;
+          const streamDataRaw = liveRoom.streamData?.pull_data?.stream_data || liveRoom.stream_url?.pull_data?.stream_data;
+
+          if (streamDataRaw) {
+            try {
+              const streamObj =
+                typeof streamDataRaw === 'string' ? JSON.parse(streamDataRaw) : streamDataRaw;
+              const mainData = streamObj?.data;
+              if (mainData) {
+                rawHlsUrl =
+                  mainData?.hd?.main?.hls ||
+                  mainData?.sd?.main?.hls ||
+                  mainData?.origin?.main?.hls ||
+                  mainData?.ld?.main?.hls;
+              }
+            } catch (e) {
+              console.warn('Failed parsing stream_data JSON', e);
             }
-          } catch (e) {
-            console.warn('Failed parsing stream_data JSON', e);
           }
-        }
 
-        if (isLive && rawHlsUrl) {
-          const cleanHls = rawHlsUrl.replace(/[\\"\s]+$/, '');
-          const proxiedUrl = `/api/proxy-stream?url=${encodeURIComponent(cleanHls)}`;
+          if (isLive && rawHlsUrl) {
+            const cleanHls = rawHlsUrl.replace(/[\\"\s]+$/, '');
+            const proxiedUrl = `/api/proxy-stream?url=${encodeURIComponent(cleanHls)}`;
+
+            return NextResponse.json({
+              success: true,
+              isLive: true,
+              username,
+              title,
+              hlsUrl: proxiedUrl,
+              directHlsUrl: cleanHls,
+              viewerCount,
+              coverUrl,
+            });
+          }
 
           return NextResponse.json({
             success: true,
-            isLive: true,
+            isLive: false,
             username,
             title,
-            hlsUrl: proxiedUrl,
+            error: `@${username} is currently OFFLINE`,
             viewerCount,
             coverUrl,
           });
         }
-
-        // Offline state
-        return NextResponse.json({
-          success: true,
-          isLive: false,
-          username,
-          title,
-          error: `@${username} is currently OFFLINE`,
-          viewerCount,
-          coverUrl,
-        });
       }
+    } catch (endpointErr) {
+      console.warn(`Error querying endpoint ${apiUrl}:`, endpointErr);
     }
-
-    return NextResponse.json({
-      success: false,
-      isLive: false,
-      username,
-      error: `Could not retrieve live stream for @${username}`,
-    });
-  } catch (err: unknown) {
-    return NextResponse.json({
-      success: false,
-      isLive: false,
-      username,
-      error: err instanceof Error ? err.message : 'Error resolving TikTok live stream',
-    });
   }
+
+  return NextResponse.json({
+    success: false,
+    isLive: false,
+    username,
+    error: `Could not retrieve live stream for @${username} (Stream may be offline or restricted)`,
+  });
 }

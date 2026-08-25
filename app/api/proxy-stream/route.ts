@@ -10,12 +10,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const cleanUrl = targetUrl.replace(/[\\"\s]+$/, '');
-    const urlObj = new URL(cleanUrl);
 
     const response = await fetch(cleanUrl, {
       headers: {
         'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Referer': 'https://www.tiktok.com/',
         'Origin': 'https://www.tiktok.com',
       },
@@ -34,21 +33,24 @@ export async function GET(request: NextRequest) {
       const text = await response.text();
       const baseUrl = cleanUrl.substring(0, cleanUrl.lastIndexOf('/') + 1);
 
-      const modifiedPlaylist = text.split('\n').map((line) => {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) {
-          return line;
-        }
+      const modifiedPlaylist = text
+        .split('\n')
+        .map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) {
+            return line;
+          }
 
-        let fullChunkUrl: string;
-        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-          fullChunkUrl = trimmed;
-        } else {
-          fullChunkUrl = new URL(trimmed, baseUrl).toString();
-        }
+          let fullChunkUrl: string;
+          if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            fullChunkUrl = trimmed;
+          } else {
+            fullChunkUrl = new URL(trimmed, baseUrl).toString();
+          }
 
-        return `/api/proxy-stream?url=${encodeURIComponent(fullChunkUrl)}`;
-      }).join('\n');
+          return `/api/proxy-stream?url=${encodeURIComponent(fullChunkUrl)}`;
+        })
+        .join('\n');
 
       return new NextResponse(modifiedPlaylist, {
         headers: {
@@ -60,9 +62,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Binary TS chunks or media data
-    const arrayBuffer = await response.arrayBuffer();
-    return new NextResponse(arrayBuffer, {
+    // Pass through video chunks directly with streaming body
+    return new NextResponse(response.body, {
       headers: {
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',

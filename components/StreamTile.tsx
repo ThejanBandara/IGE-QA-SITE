@@ -43,6 +43,7 @@ export function StreamTile({
   const [resolvedHlsUrl, setResolvedHlsUrl] = useState<string | null>(stream.hlsUrl || null);
   const [isResolving, setIsResolving] = useState(false);
   const [viewerCount, setViewerCount] = useState<number | undefined>(undefined);
+  const [directHlsUrl, setDirectHlsUrl] = useState<string | null>(null);
 
   // Resolve TikTok Live HLS stream if needed
   useEffect(() => {
@@ -57,12 +58,14 @@ export function StreamTile({
             setIsResolving(false);
             if (data.success && data.hlsUrl) {
               setResolvedHlsUrl(data.hlsUrl);
+              setDirectHlsUrl(data.directHlsUrl || null);
               setViewerCount(data.viewerCount);
               if (data.title && (!stream.title || stream.title.startsWith('Feed #'))) {
                 onUpdateStream(index, { title: data.title });
               }
             } else {
               setResolvedHlsUrl(null);
+              setDirectHlsUrl(null);
             }
           }
         })
@@ -286,6 +289,7 @@ export function StreamTile({
           <HlsPlayer
             key={reloadKey}
             src={resolvedHlsUrl || ''}
+            fallbackSrc={directHlsUrl || undefined}
             title={stream.title}
             username={stream.tiktokUsername}
             viewerCount={viewerCount}

@@ -6,6 +6,7 @@ import { Volume2, VolumeX, AlertCircle, RefreshCw, Radio, User } from 'lucide-re
 
 interface HlsPlayerProps {
   src: string;
+  fallbackSrc?: string;
   title: string;
   isMuted?: boolean;
   onToggleMute?: () => void;
@@ -16,6 +17,7 @@ interface HlsPlayerProps {
 
 export function HlsPlayer({
   src,
+  fallbackSrc,
   title,
   isMuted = true,
   poster,
@@ -75,8 +77,13 @@ export function HlsPlayer({
               break;
             default:
               console.error('Unrecoverable HLS error:', data);
-              setError('Stream feed disconnected or ended');
-              hls.destroy();
+              if (fallbackSrc && src !== fallbackSrc) {
+                console.log('Attempting fallback to direct HLS source...');
+                hls.loadSource(fallbackSrc);
+              } else {
+                setError('Stream feed disconnected or ended');
+                hls.destroy();
+              }
               break;
           }
         }

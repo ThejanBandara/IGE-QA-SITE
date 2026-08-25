@@ -13,6 +13,7 @@ import {
   Radio,
   Volume2
 } from 'lucide-react';
+import Image from 'next/image';
 
 interface HeaderProps {
   gridMode: GridMode;
@@ -62,58 +63,36 @@ export function Header({
   );
 
   return (
-    <header className="bg-zinc-950/95 border-b border-zinc-800/80 px-4 py-2.5 sticky top-0 z-30 backdrop-blur-md">
+    <header className="bg-gray-500/10 shadow-2xl backdrop-blur-2xl px-4 py-2.5 sticky top-0 z-30">
       <div className="max-w-[1920px] mx-auto flex items-center justify-between gap-4">
         {/* Brand & Live status */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
-              <Tv className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm tracking-tight text-white font-mono">
-                  LIVE<span className="text-indigo-400">MONITOR</span>
-                </span>
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-[10px] font-semibold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  ONLINE
-                </span>
-              </div>
-              <p className="text-[10px] text-zinc-400 hidden sm:block">
-                Social Multi-Stream Broadcast Center
-              </p>
-            </div>
-          </div>
+          <Image src={'https://ingame.global/wp-content/uploads/2022/02/mailer-ige-white.png'} alt="Logo" width={100} height={100} className='h-11/12' />
+          <h1 className='text-xl font-bold tracking-wider'>QUALITY ASSUARANCE</h1>
         </div>
 
         {/* Center: Live Time / UTC Status Bar */}
-        <div className="hidden md:flex items-center gap-4 bg-zinc-900/80 px-3.5 py-1.5 rounded-xl border border-zinc-800 text-xs">
+        <div className="hidden md:flex items-center gap-4 text-lg px-3.5 py-1.5 rounded-xl border border-zinc-800">
           <div className="flex items-center gap-1.5 font-mono text-zinc-200 font-bold">
             <Clock className="w-3.5 h-3.5 text-indigo-400" />
             <span>{timeStr || '--:--:--'}</span>
           </div>
           <span className="text-zinc-600">|</span>
-          <div className="font-mono text-[11px] text-zinc-400">
+          <div className="font-mono text-zinc-400">
             <span>{utcStr || '--:--:-- UTC'}</span>
-          </div>
-          <span className="text-zinc-600">|</span>
-          <div className="text-[11px] text-zinc-400 flex items-center gap-1 font-mono">
-            <Radio className="w-3 h-3 text-red-500 animate-pulse" />
-            <span>{streamCount} Feeds Active</span>
           </div>
         </div>
 
         {/* Right Action Controls */}
         <div className="flex items-center gap-2">
           {/* 4 / 6 Grid Switcher */}
-          <div className="flex items-center bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+          <div className="flex items-center p-1 rounded-lg border border-zinc-800">
             <button
               onClick={() => onChangeGridMode('4')}
               title="4-Grid Layout (2x2)"
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
                 gridMode === '4'
-                  ? 'bg-indigo-600 text-white shadow'
+                  ? 'bg-pink-600 text-white shadow'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -125,7 +104,7 @@ export function Header({
               title="6-Grid Layout (3x2)"
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
                 gridMode === '6'
-                  ? 'bg-indigo-600 text-white shadow'
+                  ? 'bg-pink-600 text-white shadow'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
@@ -140,7 +119,7 @@ export function Header({
             title="Configure Stream Links"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 transition-colors shadow"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-rose-400" />
             <span className="hidden sm:inline">Configure Feeds</span>
           </button>
 
