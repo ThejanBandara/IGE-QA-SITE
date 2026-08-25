@@ -147,22 +147,53 @@ export async function GET(request: NextRequest) {
                 }
               }
 
+              // ── Helper: derive HLS URL from FLV URL (TikTok CDN pattern) ────
+              const flvToHls = (flvUrl: string): string | undefined => {
+                if (!flvUrl || !flvUrl.startsWith('http')) return undefined;
+                // pull-flv-xxx.tiktokcdn*.com/.../stream-ID_hd.flv → pull-hls-xxx.tiktokcdn*.com/.../stream-ID_hd.m3u8
+                const hls = flvUrl
+                  .replace(/pull-flv/g, 'pull-hls')
+                  .replace(/\.flv(\?|$)/, '.m3u8$1');
+                console.log(`[tiktok-live] ${endpointLabel} Derived HLS from FLV: ${hls.slice(0, 120)}`);
+                return hls;
+              };
+
               // ── Probe all known TikTok HLS path variants ───────────────────
               const tryHls = (q: string): string | undefined => {
                 const qObj = mainData[q] as Record<string, unknown> | undefined;
                 if (!qObj) return undefined;
-                // Pattern 1: quality.main.hls  (old webcast endpoint)
+
+                // Pattern 1: quality.main.hls  (webcast endpoint - may be empty string)
                 const mainStream = qObj.main as Record<string, unknown> | undefined;
-                if (mainStream?.hls) return mainStream.hls as string;
-                // Pattern 2: quality.hls  (api-live endpoint)
-                if (qObj.hls) return qObj.hls as string;
-                // Pattern 3: quality.url_list[0] where url ends with .m3u8
+                if (mainStream && typeof mainStream === 'object') {
+                  const hlsVal = mainStream.hls as string | undefined;
+                  const flvVal = mainStream.flv as string | undefined;
+                  const cmafVal = mainStream.cmaf as string | undefined;
+
+                  // HLS present and non-empty
+                  if (hlsVal && hlsVal.startsWith('http')) return hlsVal;
+                  // CMAF (sometimes contains m3u8)
+                  if (cmafVal && cmafVal.startsWith('http')) return cmafVal;
+                  // Derive HLS from FLV when HLS is empty
+                  if (flvVal && flvVal.startsWith('http')) return flvToHls(flvVal);
+                }
+
+                // Pattern 2: quality.hls directly (some api-live responses)
+                const directHls = qObj.hls as string | undefined;
+                if (directHls && directHls.startsWith('http')) return directHls;
+
+                // Pattern 3: quality.url_list — prefer .m3u8 urls
                 const urlList = qObj.url_list as string[] | undefined;
                 if (Array.isArray(urlList)) {
                   const m3u8 = urlList.find((u) => u.includes('.m3u8'));
                   if (m3u8) return m3u8;
                   if (urlList[0]) return urlList[0];
                 }
+
+                // Pattern 4: derive from direct flv on quality object
+                const directFlv = qObj.flv as string | undefined;
+                if (directFlv && directFlv.startsWith('http')) return flvToHls(directFlv);
+
                 return undefined;
               };
 
