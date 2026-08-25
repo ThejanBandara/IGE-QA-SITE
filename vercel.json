@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "app/api/proxy-stream/route.ts": {
+      "regions": ["sin1", "hnd1", "fra1"]
+    },
+    "app/api/tiktok-live/route.ts": {
+      "regions": ["sin1", "hnd1", "fra1"]
+    }
+  }
+}

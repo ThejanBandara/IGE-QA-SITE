@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * If TIKTOK_PROXY_BASE is set (e.g. your Cloudflare Worker URL like
+ * https://tiktok-proxy.yourname.workers.dev), TikTok CDN URLs will be
+ * re-routed through that worker instead of being fetched server-side.
+ * This bypasses Vercel's AWS IP blocks on TikTok CDN.
+ */
+const CF_WORKER_BASE = process.env.TIKTOK_PROXY_BASE || '';
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get('url');
@@ -8,16 +16,36 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Missing url parameter', { status: 400 });
   }
 
+  const cleanUrl = targetUrl.replace(/[\\"\\s]+$/, '');
+  const isTikTokCdn =
+    cleanUrl.includes('tiktokcdn') || cleanUrl.includes('tiktok-live');
+
+  // ── If a Cloudflare Worker proxy base is configured, redirect TikTok CDN ──
+  if (CF_WORKER_BASE && isTikTokCdn) {
+    const workerUrl = `${CF_WORKER_BASE.replace(/\/$/, '')}?url=${encodeURIComponent(cleanUrl)}`;
+    console.log(`[proxy-stream] Redirecting TikTok CDN to CF Worker: ${workerUrl.slice(0, 120)}`);
+    return NextResponse.redirect(workerUrl, { status: 302 });
+  }
+
   try {
-    const cleanUrl = targetUrl.replace(/[\\"\\s]+$/, '');
     console.log(`[proxy-stream] Proxying URL: ${cleanUrl.slice(0, 150)}`);
 
     const response = await fetch(cleanUrl, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Referer': 'https://www.tiktok.com/',
         'Origin': 'https://www.tiktok.com',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'sec-ch-ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'Connection': 'keep-alive',
       },
     });
 
@@ -38,7 +66,7 @@ export async function GET(request: NextRequest) {
       const text = await response.text();
       const baseUrl = cleanUrl.substring(0, cleanUrl.lastIndexOf('/') + 1);
       const lineCount = text.split('\n').length;
-      console.log(`[proxy-stream] m3u8 playlist received — ${lineCount} lines, base: ${baseUrl.slice(0, 100)}`);
+      console.log(`[proxy-stream] m3u8 playlist received — ${lineCount} lines`);
 
       const modifiedPlaylist = text
         .split('\n')
@@ -70,7 +98,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Pass through video chunks directly with streaming body
-    console.log(`[proxy-stream] Streaming binary chunk for: ${cleanUrl.slice(0, 80)}...`);
+    console.log(`[proxy-stream] Streaming binary chunk`);
     return new NextResponse(response.body, {
       headers: {
         'Content-Type': contentType,
