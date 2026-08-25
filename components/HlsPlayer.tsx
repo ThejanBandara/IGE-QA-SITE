@@ -43,11 +43,27 @@ export function HlsPlayer({
         hlsRef.current.destroy();
       }
 
+      // Detect TikTok CDN URLs — they need a TikTok referrer
+      const isTikTokCdn = src.includes('tiktokcdn') || src.includes('tiktok.com');
+      const isFallbackTikTok = fallbackSrc
+        ? fallbackSrc.includes('tiktokcdn') || fallbackSrc.includes('tiktok.com')
+        : false;
+
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 30,
         liveSyncDurationCount: 3,
+        // For TikTok CDN: set referrer so CDN allows browser requests
+        ...(isTikTokCdn && {
+          fetchSetup: (context, initParams) =>
+            new Request(context.url, {
+              ...initParams,
+              referrerPolicy: 'no-referrer-when-downgrade',
+              referrer: 'https://www.tiktok.com/',
+              mode: 'cors',
+            }),
+        }),
       });
       hlsRef.current = hls;
 
@@ -68,17 +84,54 @@ export function HlsPlayer({
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.warn('HLS Network Error, attempting recovery...');
-              hls.startLoad();
+              // On 403/network failure, attempt fallback to proxy before giving up
+              if (
+                fallbackSrc &&
+                src !== fallbackSrc &&
+                (data.response?.code === 403 || data.response?.code === 0)
+              ) {
+                console.warn(
+                  `[HlsPlayer] Network error (${data.response?.code}) on primary, switching to fallback: ${fallbackSrc?.slice(0, 80)}`
+                );
+                // Reconfigure hls.js without TikTok referrer for proxy URL
+                if (!isFallbackTikTok) {
+                  // proxy URL — recreate without fetchSetup
+                  hls.destroy();
+                  const fallbackHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 30,
+                    liveSyncDurationCount: 3,
+                  });
+                  hlsRef.current = fallbackHls;
+                  fallbackHls.loadSource(fallbackSrc!);
+                  fallbackHls.attachMedia(video);
+                  fallbackHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    setIsLoading(false);
+                    video.play().catch(() => {});
+                  });
+                  fallbackHls.on(Hls.Events.ERROR, (_e2, d2) => {
+                    if (d2.fatal) {
+                      setError('Stream feed disconnected or ended');
+                      fallbackHls.destroy();
+                    }
+                  });
+                } else {
+                  hls.loadSource(fallbackSrc!);
+                }
+              } else {
+                console.warn('[HlsPlayer] Network Error, attempting recovery...');
+                hls.startLoad();
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.warn('HLS Media Error, attempting recovery...');
+              console.warn('[HlsPlayer] Media Error, attempting recovery...');
               hls.recoverMediaError();
               break;
             default:
-              console.error('Unrecoverable HLS error:', data);
+              console.error('[HlsPlayer] Unrecoverable HLS error:', data);
               if (fallbackSrc && src !== fallbackSrc) {
-                console.log('Attempting fallback to direct HLS source...');
+                console.log('[HlsPlayer] Attempting fallback to proxy HLS source...');
                 hls.loadSource(fallbackSrc);
               } else {
                 setError('Stream feed disconnected or ended');

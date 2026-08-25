@@ -57,8 +57,13 @@ export function StreamTile({
           if (!isCancelled) {
             setIsResolving(false);
             if (data.success && data.hlsUrl) {
-              setResolvedHlsUrl(data.hlsUrl);
-              setDirectHlsUrl(data.directHlsUrl || null);
+              // Prefer direct CDN URL as primary — let the browser fetch it with
+              // a proper browser origin/referer. Vercel's proxy gets 403 from
+              // TikTok CDN because its AWS IPs are blocked server-side.
+              const direct = data.directHlsUrl || null;
+              const proxied = data.hlsUrl;
+              setResolvedHlsUrl(direct || proxied);   // direct first
+              setDirectHlsUrl(direct ? proxied : null); // proxied as fallback
               setViewerCount(data.viewerCount);
               if (data.title && (!stream.title || stream.title.startsWith('Feed #'))) {
                 onUpdateStream(index, { title: data.title });
