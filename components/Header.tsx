@@ -6,6 +6,7 @@ import {
   Tv, 
   Grid2X2, 
   Grid3X3, 
+  LayoutGrid,
   Clock, 
   SlidersHorizontal, 
   Maximize, 
@@ -110,6 +111,30 @@ export function Header({
             >
               <Grid3X3 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">6 Grid</span>
+            </button>
+            <button
+              onClick={() => onChangeGridMode('8')}
+              title="8-Grid Layout (4x2)"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                gridMode === '8'
+                  ? 'bg-pink-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">8 Grid</span>
+            </button>
+            <button
+              onClick={() => onChangeGridMode('10')}
+              title="10-Grid Layout (5x2)"
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                gridMode === '10'
+                  ? 'bg-pink-600 text-white shadow'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">10 Grid</span>
             </button>
           </div>
 

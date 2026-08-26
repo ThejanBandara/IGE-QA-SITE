@@ -6,6 +6,7 @@ import { parseStreamUrl, DEMO_STREAMS } from '@/lib/embedUtils';
 import { 
   Grid2X2, 
   Grid3X3, 
+  LayoutGrid,
   Sparkles, 
   Check, 
   X, 
@@ -32,7 +33,7 @@ export function SetupModal({
   onSaveConfig,
 }: SetupModalProps) {
   const [gridMode, setGridMode] = useState<GridMode>(currentGridMode || '4');
-  const targetCount = gridMode === '4' ? 4 : 6;
+  const targetCount = gridMode === '10' ? 10 : gridMode === '8' ? 8 : gridMode === '6' ? 6 : 4;
 
   // Initialize input slots
   const [slots, setSlots] = useState<{ title: string; url: string }[]>([]);
@@ -40,7 +41,7 @@ export function SetupModal({
   useEffect(() => {
     if (isOpen) {
       setGridMode(currentGridMode || '4');
-      const count = currentGridMode === '6' ? 6 : 4;
+      const count = currentGridMode === '10' ? 10 : currentGridMode === '8' ? 8 : currentGridMode === '6' ? 6 : 4;
       const initialSlots = Array.from({ length: count }, (_, i) => ({
         title: currentStreams[i]?.title || `Feed #${i + 1}`,
         url: currentStreams[i]?.url || '',
@@ -51,7 +52,7 @@ export function SetupModal({
 
   const handleGridModeChange = (mode: GridMode) => {
     setGridMode(mode);
-    const count = mode === '4' ? 4 : 6;
+    const count = mode === '10' ? 10 : mode === '8' ? 8 : mode === '6' ? 6 : 4;
     setSlots((prev) => {
       const next = [...prev];
       if (next.length < count) {
@@ -120,7 +121,7 @@ export function SetupModal({
             <div>
               <h2 className="text-base font-bold text-zinc-100">Configure Live Monitoring Grid</h2>
               <p className="text-xs text-zinc-400">
-                Choose 4 or 6 streams and paste YouTube or Facebook Live links.
+                Choose 4, 6, 8 or 10 streams and paste YouTube, Facebook, TikTok, or HLS links.
               </p>
             </div>
           </div>
@@ -173,6 +174,42 @@ export function SetupModal({
                 <div>
                   <h4 className="text-sm font-bold text-zinc-100">6 Streams Grid (3x2)</h4>
                   <p className="text-xs text-zinc-400">High-density multi-view monitor wall</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGridModeChange('8')}
+                className={`p-4 rounded-xl border flex items-center gap-3.5 text-left transition-all ${
+                  gridMode === '8'
+                    ? 'border-indigo-500 bg-indigo-950/30 ring-2 ring-indigo-500/40'
+                    : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                }`}
+              >
+                <div className="p-2.5 rounded-lg bg-zinc-800 text-indigo-400">
+                  <LayoutGrid className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-100">8 Streams Grid (4x2)</h4>
+                  <p className="text-xs text-zinc-400">Wide layout for 8 simultaneous streams</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGridModeChange('10')}
+                className={`p-4 rounded-xl border flex items-center gap-3.5 text-left transition-all ${
+                  gridMode === '10'
+                    ? 'border-indigo-500 bg-indigo-950/30 ring-2 ring-indigo-500/40'
+                    : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
+                }`}
+              >
+                <div className="p-2.5 rounded-lg bg-zinc-800 text-indigo-400">
+                  <LayoutGrid className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-100">10 Streams Grid (5x2)</h4>
+                  <p className="text-xs text-zinc-400">Maximum density monitor wall</p>
                 </div>
               </button>
             </div>

@@ -43,7 +43,7 @@ export default function LiveMonitorDashboard() {
       const savedStreams = localStorage.getItem(STORAGE_KEY_STREAMS);
       const savedTimers = localStorage.getItem(STORAGE_KEY_TIMERS);
 
-      if (savedGrid === '4' || savedGrid === '6') {
+      if (savedGrid === '4' || savedGrid === '6' || savedGrid === '8' || savedGrid === '10') {
         setGridMode(savedGrid);
       }
 
@@ -72,7 +72,7 @@ export default function LiveMonitorDashboard() {
   }, []);
 
   const loadDefaultStreams = (mode: GridMode) => {
-    const count = mode === '6' ? 6 : 4;
+    const count = mode === '10' ? 10 : mode === '8' ? 8 : mode === '6' ? 6 : 4;
     const initial: StreamItem[] = DEMO_STREAMS.slice(0, count).map((d, i) => {
       const parsed = parseStreamUrl(d.url);
       return {
@@ -261,7 +261,7 @@ export default function LiveMonitorDashboard() {
   const handleChangeGridMode = (mode: GridMode) => {
     setGridMode(mode);
     setFocusedIndex(null);
-    const count = mode === '6' ? 6 : 4;
+    const count = mode === '10' ? 10 : mode === '8' ? 8 : mode === '6' ? 6 : 4;
     setStreams((prev) => {
       if (prev.length < count) {
         const next = [...prev];
@@ -368,7 +368,7 @@ export default function LiveMonitorDashboard() {
     toast.success(`Added +${Math.round(extraSeconds / 60)} minute(s)`);
   };
 
-  const activeCount = gridMode === '4' ? 4 : 6;
+  const activeCount = gridMode === '10' ? 10 : gridMode === '8' ? 8 : gridMode === '6' ? 6 : 4;
   const currentStreams = streams.slice(0, activeCount);
 
   return (
@@ -455,12 +455,16 @@ export default function LiveMonitorDashboard() {
             </div>
           </div>
         ) : (
-          /* Multi-Stream Grid Mode (4 or 6 Layout) */
+          /* Multi-Stream Grid Mode (4, 6, 8, or 10 Layout) */
           <div
             className={`flex-1 grid gap-3 sm:gap-4 ${
               gridMode === '4'
                 ? 'grid-cols-1 md:grid-cols-2 grid-rows-2'
-                : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                : gridMode === '6'
+                ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                : gridMode === '8'
+                ? 'grid-cols-2 md:grid-cols-2 xl:grid-cols-4'
+                : 'grid-cols-2 md:grid-cols-2 xl:grid-cols-5'
             }`}
           >
             {currentStreams.map((stream, idx) => (

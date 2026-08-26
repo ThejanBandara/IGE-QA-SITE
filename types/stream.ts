@@ -1,6 +1,6 @@
 export type PlatformType = 'youtube' | 'facebook' | 'tiktok' | 'hls' | 'custom';
 
-export type GridMode = '4' | '6';
+export type GridMode = '4' | '6' | '8' | '10';
 
 export interface StreamItem {
   id: string;
