@@ -1,4 +1,4 @@
-export type PlatformType = 'youtube' | 'facebook' | 'tiktok' | 'hls' | 'custom';
+export type PlatformType = 'youtube' | 'facebook' | 'tiktok' | 'twitch' | 'vk' | 'hls' | 'custom';
 
 export type GridMode = '4' | '6' | '8' | '10';
 

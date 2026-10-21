@@ -152,6 +152,22 @@ export function StreamTile({
         </span>
       );
     }
+    if (stream.platform === 'twitch') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-950/80 text-purple-400 border border-purple-800/60">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+          Twitch
+        </span>
+      );
+    }
+    if (stream.platform === 'vk') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-950/80 text-sky-400 border border-sky-800/60">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+          VK Video
+        </span>
+      );
+    }
     if (stream.platform === 'hls') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
@@ -259,13 +275,13 @@ export function StreamTile({
             </div>
             <div>
               <label className="block text-[11px] font-medium text-zinc-400 mb-0.5">
-                YouTube, Facebook, or TikTok URL / @username
+                YouTube, Twitch, VK, Facebook, or TikTok URL / @username
               </label>
               <input
                 type="text"
                 value={editUrl}
                 onChange={(e) => setEditUrl(e.target.value)}
-                placeholder="https://youtube.com/... or https://tiktok.com/@user/live or @username"
+                placeholder="https://twitch.tv/... or https://vk.com/video... or https://youtube.com/..."
                 className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-700 rounded text-xs text-zinc-100 focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -302,10 +318,22 @@ export function StreamTile({
         ) : stream.embedUrl ? (
           <iframe
             key={reloadKey}
-            src={stream.embedUrl}
+            src={
+              stream.platform === 'twitch' && typeof window !== 'undefined' && window.location.hostname
+                ? (() => {
+                    try {
+                      const u = new URL(stream.embedUrl);
+                      u.searchParams.set('parent', window.location.hostname);
+                      return u.toString();
+                    } catch {
+                      return stream.embedUrl;
+                    }
+                  })()
+                : stream.embedUrl
+            }
             title={stream.title || `Live Stream ${index + 1}`}
             className="w-full h-full absolute inset-0 border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
             allowFullScreen
           />
         ) : (
@@ -336,7 +364,13 @@ export function StreamTile({
         <span className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-ping opacity-75" />
           <span className="text-zinc-400 font-mono">
-            {stream.platform === 'tiktok' ? 'TIKTOK_HLS_LIVE' : 'FEED_SYNC_OK'}
+            {stream.platform === 'tiktok'
+              ? 'TIKTOK_HLS_LIVE'
+              : stream.platform === 'twitch'
+              ? 'TWITCH_LIVE'
+              : stream.platform === 'vk'
+              ? 'VK_STREAM_OK'
+              : 'FEED_SYNC_OK'}
           </span>
         </span>
         <span className="text-zinc-500 flex items-center gap-1 font-mono">

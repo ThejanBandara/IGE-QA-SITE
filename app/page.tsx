@@ -446,6 +446,10 @@ export default function LiveMonitorDashboard() {
                     <span>FEED {idx + 1}</span>
                     {s.platform === 'youtube' && <span className="text-red-400">YT</span>}
                     {s.platform === 'facebook' && <span className="text-blue-400">FB</span>}
+                    {s.platform === 'tiktok' && <span className="text-pink-400">TT</span>}
+                    {s.platform === 'twitch' && <span className="text-purple-400">TW</span>}
+                    {s.platform === 'vk' && <span className="text-sky-400">VK</span>}
+                    {s.platform === 'hls' && <span className="text-emerald-400">HLS</span>}
                   </div>
                   <div className="text-xs font-semibold text-zinc-200 truncate">
                     {s.title || `Stream ${idx + 1}`}

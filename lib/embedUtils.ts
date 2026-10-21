@@ -105,6 +105,117 @@ export function extractFacebookVideoId(url: string): string | null {
 }
 
 /**
+ * Extracts Twitch embed URL for channels, VODs, or clips
+ */
+export function extractTwitchEmbed(url: string): string | null {
+  try {
+    const trimmed = sanitizeRawInput(url);
+    if (!trimmed) return null;
+    const parent = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+
+    // Already an embed player URL
+    if (trimmed.includes('player.twitch.tv') || trimmed.includes('clips.twitch.tv/embed')) {
+      let embed = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+      if (!embed.includes('parent=')) {
+        embed += (embed.includes('?') ? '&' : '?') + `parent=${parent}`;
+      }
+      if (!embed.includes('autoplay=')) {
+        embed += '&autoplay=true';
+      }
+      if (!embed.includes('muted=')) {
+        embed += '&muted=true';
+      }
+      return embed;
+    }
+
+    // Clips: clips.twitch.tv/ClipId or twitch.tv/channel/clip/ClipId
+    const clipMatch = trimmed.match(/(?:clips\.twitch\.tv\/|twitch\.tv\/[^/]+\/clip\/)([a-zA-Z0-9_-]+)/i);
+    if (clipMatch) {
+      return `https://clips.twitch.tv/embed?clip=${clipMatch[1]}&parent=${parent}&autoplay=true&muted=true`;
+    }
+
+    // Videos / VODs: twitch.tv/videos/123456
+    const videoMatch = trimmed.match(/twitch\.tv\/videos\/(\d+)/i);
+    if (videoMatch) {
+      return `https://player.twitch.tv/?video=${videoMatch[1]}&parent=${parent}&autoplay=true&muted=true`;
+    }
+
+    // Live Channel: twitch.tv/username
+    const channelMatch = trimmed.match(/twitch\.tv\/([a-zA-Z0-9_]{3,25})/i);
+    if (channelMatch) {
+      const channel = channelMatch[1];
+      const reserved = ['directory', 'videos', 'downloads', 'jobs', 'turbo', 'settings'];
+      if (!reserved.includes(channel.toLowerCase())) {
+        return `https://player.twitch.tv/?channel=${channel}&parent=${parent}&autoplay=true&muted=true`;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extracts VK Video / VK Play Live embed URL
+ */
+export function extractVkEmbed(url: string): string | null {
+  try {
+    const trimmed = sanitizeRawInput(url);
+    if (!trimmed) return null;
+
+    // Direct iframe embed player (vk.com/video_ext.php or vkvideo.ru/video_ext.php)
+    if (trimmed.includes('video_ext.php')) {
+      let embed = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+      if (!embed.includes('autoplay=')) {
+        embed += (embed.includes('?') ? '&' : '?') + 'autoplay=1';
+      }
+      return embed;
+    }
+
+    // VK Play Live (live.vkplay.ru/{channel} or vkplay.live/{channel})
+    const vkPlayMatch = trimmed.match(/(?:live\.vkplay\.ru|vkplay\.live)\/([a-zA-Z0-9_.-]+)/i);
+    if (vkPlayMatch) {
+      const channel = vkPlayMatch[1];
+      const reserved = ['app', 'category', 'games', 'directory'];
+      if (!reserved.includes(channel.toLowerCase())) {
+        return `https://live.vkplay.ru/app/embed/${channel}`;
+      }
+    }
+
+    // VK Video query param format: ?z=video-123_456
+    const zMatch = trimmed.match(/[?&]z=video(-?\d+)_(\d+)/i);
+    if (zMatch) {
+      const oid = zMatch[1];
+      const id = zMatch[2];
+      const hashMatch = trimmed.match(/[?&]hash=([a-zA-Z0-9]+)/i);
+      const hashParam = hashMatch ? `&hash=${hashMatch[1]}` : '';
+      return `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hashParam}&autoplay=1`;
+    }
+
+    // VK Video standard format: vk.com/video-123_456 or vkvideo.ru/video-123_456
+    const videoMatch = trimmed.match(/(?:vk\.com|vkvideo\.ru)\/video(-?\d+)_(\d+)/i);
+    if (videoMatch) {
+      const oid = videoMatch[1];
+      const id = videoMatch[2];
+      const hashMatch = trimmed.match(/[?&]hash=([a-zA-Z0-9]+)/i);
+      const hashParam = hashMatch ? `&hash=${hashMatch[1]}` : '';
+      return `https://vk.com/video_ext.php?oid=${oid}&id=${id}${hashParam}&autoplay=1`;
+    }
+
+    // VK Live broadcast: vk.com/live/{id}
+    const liveMatch = trimmed.match(/vk\.com\/live\/(\d+)/i);
+    if (liveMatch) {
+      return `https://vk.com/video_ext.php?oid=-${liveMatch[1]}&id=${liveMatch[1]}&autoplay=1`;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse any social video or live link into a safe, autoplayable embed URL or HLS stream
  */
 export function parseStreamUrl(url: string): ParsedStreamInfo {
@@ -248,7 +359,43 @@ export function parseStreamUrl(url: string): ParsedStreamInfo {
     };
   }
 
-  // 5. Fallback for custom or direct embed link
+  // 5. Check Twitch
+  if (
+    trimmed.includes('twitch.tv') ||
+    trimmed.includes('clips.twitch.tv')
+  ) {
+    const twitchEmbed = extractTwitchEmbed(trimmed);
+    if (twitchEmbed) {
+      return {
+        platform: 'twitch',
+        embedUrl: twitchEmbed,
+        streamType: 'iframe',
+        originalUrl: trimmed,
+        isValid: true,
+      };
+    }
+  }
+
+  // 6. Check VK (VK Video, VK Live, VK Play Live)
+  if (
+    trimmed.includes('vk.com') ||
+    trimmed.includes('vkvideo.ru') ||
+    trimmed.includes('vkplay.ru') ||
+    trimmed.includes('vkplay.live')
+  ) {
+    const vkEmbed = extractVkEmbed(trimmed);
+    if (vkEmbed) {
+      return {
+        platform: 'vk',
+        embedUrl: vkEmbed,
+        streamType: 'iframe',
+        originalUrl: trimmed,
+        isValid: true,
+      };
+    }
+  }
+
+  // 7. Fallback for custom or direct embed link
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return {
       platform: 'custom',
@@ -264,7 +411,7 @@ export function parseStreamUrl(url: string): ParsedStreamInfo {
     embedUrl: trimmed,
     originalUrl: trimmed,
     isValid: false,
-    error: 'Please provide a valid YouTube, Facebook, TikTok, or HLS stream URL',
+    error: 'Please provide a valid YouTube, Twitch, VK, Facebook, TikTok, or HLS stream URL',
   };
 }
 

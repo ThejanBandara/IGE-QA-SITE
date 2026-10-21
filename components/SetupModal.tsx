@@ -121,7 +121,7 @@ export function SetupModal({
             <div>
               <h2 className="text-base font-bold text-zinc-100">Configure Live Monitoring Grid</h2>
               <p className="text-xs text-zinc-400">
-                Choose 4, 6, 8 or 10 streams and paste YouTube, Facebook, TikTok, or HLS links.
+                Choose 4, 6, 8 or 10 streams and paste YouTube, Twitch, VK, Facebook, TikTok, or HLS links.
               </p>
             </div>
           </div>
@@ -271,6 +271,14 @@ export function SetupModal({
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-800">
                               Facebook
                             </span>
+                          ) : parsed.platform === 'twitch' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-400 border border-purple-800">
+                              Twitch
+                            </span>
+                          ) : parsed.platform === 'vk' ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-950 text-sky-400 border border-sky-800">
+                              VK Video
+                            </span>
                           ) : parsed.platform === 'hls' ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
                               HLS Stream
@@ -289,7 +297,7 @@ export function SetupModal({
                         type="text"
                         value={slot.url}
                         onChange={(e) => handleSlotChange(i, 'url', e.target.value)}
-                        placeholder="Paste YouTube, Facebook, TikTok (@user/live or @user), or .m3u8 URL"
+                        placeholder="Paste YouTube, Twitch, VK, Facebook, TikTok (@user/live or @user), or .m3u8 URL"
                         className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
